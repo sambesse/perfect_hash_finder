@@ -20,11 +20,25 @@ const uint16_t can_ids [] = {
     0x306,
 };
 
+const char *tag[] = {
+    "110",
+    "600",
+    "601",
+    "602",
+    "40",
+    "A",
+    "5A",
+    "16",
+    "297",
+    "313",
+    "300",
+    "306",
+};
+
 #define NUM_INPUTS (uint32_t)(sizeof(can_ids) / (sizeof(can_ids[0])))
-#define NUM_BUCKETS ((uint32_t)((uint32_t)(NUM_INPUTS) * 1.5) + 1)
+#define NUM_BUCKETS ((uint32_t)((uint32_t)(NUM_INPUTS) * 1))
 
 #define HASH(x) ((k*x % p) % NUM_BUCKETS)
-
 
 const uint32_t p = 66587; //randomly chosen prime larger than the universe of possible CAN ids
 const uint32_t max_k = (UINT32_MAX / 4096);
@@ -37,7 +51,7 @@ int main() {
         return -1;
     }
     printf("find a k value with num_inputs: %d, num_buckets: %d, starting k: %d, max k: %d\n", NUM_INPUTS, NUM_BUCKETS, min_k, max_k);
-    memset(hash_table, 0, sizeof(can_ids));
+    memset(hash_table, 0, NUM_BUCKETS * sizeof(uint16_t));
     uint32_t k = min_k;
     uint32_t i = 0;
     while(1) {
