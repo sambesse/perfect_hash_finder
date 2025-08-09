@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 const uint16_t can_ids [] = {
     0x110,
@@ -18,9 +19,18 @@ const uint16_t can_ids [] = {
     0x313,
     0x300,
     0x306,
+    0x123,
+    0x124,
+    0x125,
+    0x129,
+    0x22,
+    0x29,
+    0x30,
+    0x12,
+    0x19,
 };
 
-const char *tag[] = {
+char *tag[] = {
     "110",
     "600",
     "601",
@@ -33,45 +43,150 @@ const char *tag[] = {
     "313",
     "300",
     "306",
+    "123",
+    "124",
+    "125",
+    "129",
+    "22",
+    "29",
+    "30",
+    "12",
+    "19"
 };
 
+struct key_value {
+    uint16_t key;
+    char *val;
+};
+
+int compare(const void *a, const void *b) {
+    return ((struct key_value *)a)->key - ((struct key_value *)b)->key;
+}
+
 #define NUM_INPUTS (uint32_t)(sizeof(can_ids) / (sizeof(can_ids[0])))
-#define NUM_BUCKETS ((uint32_t)((uint32_t)(NUM_INPUTS) * 1))
+#define NUM_BUCKETS ((uint32_t)((uint32_t)(NUM_INPUTS) * 1.5) + 1)
+#define N_STRESS_TEST   100000
 
 #define HASH(x) ((k*x % p) % NUM_BUCKETS)
 
 const uint32_t p = 66587; //randomly chosen prime larger than the universe of possible CAN ids
 const uint32_t max_k = (UINT32_MAX / 4096);
 const uint32_t min_k = (uint32_t)(p / 10); //smallest CAN id, so we don't search things where the x%p=x
+struct key_value **hash_table;
+uint32_t k = min_k;
+
+struct key_value *find_hash(uint16_t key);
+struct key_value *inputs;
+int dumb_search(uint16_t key);
+void stress_test_hash(void);
 
 int main() {
-    uint16_t *hash_table = malloc(NUM_BUCKETS * sizeof(uint16_t));
+    inputs = malloc(NUM_INPUTS * sizeof(struct key_value));
+    if (!inputs) {
+        printf("failed to malloc inputs");
+        return -1;
+    }
+
+    for (uint32_t i = 0; i < NUM_INPUTS; i++) {
+        inputs[i].key = can_ids[i];
+        inputs[i].val = tag[i];
+    }
+
+    qsort(inputs, NUM_INPUTS, sizeof(inputs[0]), compare);
+
+    hash_table = malloc(NUM_BUCKETS * sizeof(struct key_value *));
     if (!hash_table) {
         printf("failed to allocate hash table\n");
         return -1;
     }
     printf("find a k value with num_inputs: %d, num_buckets: %d, starting k: %d, max k: %d\n", NUM_INPUTS, NUM_BUCKETS, min_k, max_k);
-    memset(hash_table, 0, NUM_BUCKETS * sizeof(uint16_t));
-    uint32_t k = min_k;
+    memset(hash_table, 0, NUM_BUCKETS * sizeof(struct key_value *));
     uint32_t i = 0;
     while(1) {
         for(; i < NUM_INPUTS; i++) {
-            uint32_t index = HASH(can_ids[i]);
+            uint32_t index = HASH(inputs[i].key);
             if (hash_table[index] != 0) {
                 break;
             } else {
-                hash_table[index] = can_ids[i];
+                hash_table[index] = &inputs[i];
             }
         }
         if (i == NUM_INPUTS) { //congrats no collisions
-            break; 
+            break;
         }
-        memset(hash_table, 0, NUM_BUCKETS * sizeof(uint16_t));
+        memset(hash_table, 0, NUM_BUCKETS * sizeof(struct key_value *));
         i = 0;
         k++;
+        if (k >= max_k) {
+            printf("failed to find acceptable k\n");
+            return -1;
+        }
     }
     printf("here's your hash table, with k = %d, bitch\n", k);
     for (uint32_t i = 0; i < NUM_BUCKETS; i++) {
-        printf("%X\n", hash_table[i]);
+        if (hash_table[i])
+            printf("%X\n", hash_table[i]->key);
+        else 
+            printf("%X\n", 0);
     }
+
+    for (uint32_t i = 0; i < NUM_INPUTS; i++) {
+        struct key_value *ret;
+        printf("i = %d\n", i);
+        printf("testing value %x\n", inputs[i].key);
+        if ((ret = find_hash(inputs[i].key)) != NULL) {
+            printf("found val \"%s\"\n", ret->val);
+        } else {
+            printf("miss\n");
+        }
+    }
+    printf("dont sanity testing\n");
+    stress_test_hash();
+}
+
+void stress_test_hash(void) {
+    double total_time_hash = 0;
+    double total_time_bsearch = 0;
+    double total_time_linear = 0;
+    uint16_t keys[N_STRESS_TEST];
+    struct timespec start, end;
+    for (int i = 0; i < N_STRESS_TEST; i++) {
+        keys[i] = rand() % 0x602;
+        struct key_value key_struct = {keys[i], "blah"};
+
+        clock_gettime(CLOCK_MONOTONIC, &start);
+        find_hash(keys[i]);
+        clock_gettime(CLOCK_MONOTONIC, &end);
+        total_time_hash += (end.tv_sec - start.tv_sec)*1e9 + (end.tv_nsec - start.tv_nsec);
+
+        clock_gettime(CLOCK_MONOTONIC, &start);
+        struct key_value * res = bsearch(&key_struct, inputs, NUM_INPUTS, sizeof(inputs[0]), compare);
+        clock_gettime(CLOCK_MONOTONIC, &end);
+        total_time_bsearch += (end.tv_sec - start.tv_sec)*1e9 + (end.tv_nsec - start.tv_nsec);
+
+        clock_gettime(CLOCK_MONOTONIC, &start);
+        dumb_search(keys[i]);
+        clock_gettime(CLOCK_MONOTONIC, &end);
+        total_time_linear += (end.tv_sec - start.tv_sec)*1e9 + (end.tv_nsec - start.tv_nsec);
+    }
+    printf("average hash search time: %f\n", total_time_hash/N_STRESS_TEST);
+    printf("average binary search time: %f\n", total_time_bsearch/N_STRESS_TEST);
+    printf("average linear search time: %f\n", total_time_linear/N_STRESS_TEST);
+}
+
+int dumb_search(uint16_t key) {
+    for (uint32_t i = 0; i < NUM_INPUTS; i++) {
+        if (inputs[i].key == key)
+            return i;
+    }
+    return -1;
+}
+
+struct key_value *find_hash(uint16_t key) {
+    uint32_t index = HASH(key);
+    if (!hash_table[index])
+        return NULL;
+    if (hash_table[index]->key == key)
+        return hash_table[index];
+    return NULL;
 }
