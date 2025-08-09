@@ -6,6 +6,8 @@
 #include <string.h>
 #include <time.h>
 
+#include "uthash.h"
+
 const uint16_t can_ids [] = {
     0x110,
     0x600,
@@ -28,6 +30,26 @@ const uint16_t can_ids [] = {
     0x30,
     0x12,
     0x19,
+    0x200,
+    0x201,
+    0x202,
+    0x203,
+    0x204,
+    0x205,
+    0x206,
+    0x207,
+    0x209,
+    0x210,
+    0x211,
+    0x212,
+    0x213,
+    0x214,
+    0x215,
+    0x216,
+    0x217,
+    0x218,
+    0x219,
+    0x220,
 };
 
 char *tag[] = {
@@ -51,12 +73,35 @@ char *tag[] = {
     "29",
     "30",
     "12",
-    "19"
+    "19",
+    "200",
+    "201",
+    "202",
+    "203",
+    "204",
+    "205",
+    "206",
+    "207",
+    "208",
+    "209",
+    "210",
+    "211",
+    "212",
+    "213",
+    "214",
+    "215",
+    "216",
+    "217",
+    "218",
+    "219",
+    "220",
+
 };
 
 struct key_value {
     uint16_t key;
     char *val;
+    UT_hash_handle hh;
 };
 
 int compare(const void *a, const void *b) {
@@ -64,7 +109,7 @@ int compare(const void *a, const void *b) {
 }
 
 #define NUM_INPUTS (uint32_t)(sizeof(can_ids) / (sizeof(can_ids[0])))
-#define NUM_BUCKETS ((uint32_t)((uint32_t)(NUM_INPUTS) * 1.5) + 1)
+#define NUM_BUCKETS ((uint32_t)((uint32_t)(NUM_INPUTS) * 1.9) + 1)
 #define N_STRESS_TEST   100000
 
 #define HASH(x) ((k*x % p) % NUM_BUCKETS)
@@ -79,6 +124,9 @@ struct key_value *find_hash(uint16_t key);
 struct key_value *inputs;
 int dumb_search(uint16_t key);
 void stress_test_hash(void);
+struct key_value *lib_find_hash(uint16_t key);
+
+struct key_value *lib_hash = NULL;
 
 int main() {
     inputs = malloc(NUM_INPUTS * sizeof(struct key_value));
@@ -90,6 +138,7 @@ int main() {
     for (uint32_t i = 0; i < NUM_INPUTS; i++) {
         inputs[i].key = can_ids[i];
         inputs[i].val = tag[i];
+        HASH_ADD(hh, lib_hash, key, 2, &inputs[i]);
     }
 
     qsort(inputs, NUM_INPUTS, sizeof(inputs[0]), compare);
@@ -148,8 +197,10 @@ void stress_test_hash(void) {
     double total_time_hash = 0;
     double total_time_bsearch = 0;
     double total_time_linear = 0;
+    double total_time_lib_hash = 0;
     uint16_t keys[N_STRESS_TEST];
     struct timespec start, end;
+    struct key_value *res;
     for (int i = 0; i < N_STRESS_TEST; i++) {
         keys[i] = rand() % 0x602;
         struct key_value key_struct = {keys[i], "blah"};
@@ -160,7 +211,7 @@ void stress_test_hash(void) {
         total_time_hash += (end.tv_sec - start.tv_sec)*1e9 + (end.tv_nsec - start.tv_nsec);
 
         clock_gettime(CLOCK_MONOTONIC, &start);
-        struct key_value * res = bsearch(&key_struct, inputs, NUM_INPUTS, sizeof(inputs[0]), compare);
+        res = bsearch(&key_struct, inputs, NUM_INPUTS, sizeof(inputs[0]), compare);
         clock_gettime(CLOCK_MONOTONIC, &end);
         total_time_bsearch += (end.tv_sec - start.tv_sec)*1e9 + (end.tv_nsec - start.tv_nsec);
 
@@ -168,10 +219,16 @@ void stress_test_hash(void) {
         dumb_search(keys[i]);
         clock_gettime(CLOCK_MONOTONIC, &end);
         total_time_linear += (end.tv_sec - start.tv_sec)*1e9 + (end.tv_nsec - start.tv_nsec);
+
+        clock_gettime(CLOCK_MONOTONIC, &start);
+        lib_find_hash(keys[i]);
+        clock_gettime(CLOCK_MONOTONIC, &end);
+        total_time_lib_hash += (end.tv_sec - start.tv_sec)*1e9 + (end.tv_nsec - start.tv_nsec);
     }
     printf("average hash search time: %f\n", total_time_hash/N_STRESS_TEST);
     printf("average binary search time: %f\n", total_time_bsearch/N_STRESS_TEST);
     printf("average linear search time: %f\n", total_time_linear/N_STRESS_TEST);
+    printf("average lib hash search time: %f\n", total_time_lib_hash/N_STRESS_TEST);
 }
 
 int dumb_search(uint16_t key) {
@@ -189,4 +246,10 @@ struct key_value *find_hash(uint16_t key) {
     if (hash_table[index]->key == key)
         return hash_table[index];
     return NULL;
+}
+
+struct key_value *lib_find_hash(uint16_t key) {
+    struct key_value *res;
+    HASH_FIND(hh, lib_hash, &key, 2, res);
+    return res;
 }
