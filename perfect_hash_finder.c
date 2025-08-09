@@ -31,7 +31,7 @@ const uint32_t max_k = (UINT32_MAX / 4096);
 const uint32_t min_k = (uint32_t)(p / 10); //smallest CAN id, so we don't search things where the x%p=x
 
 int main() {
-    uint16_t *hash_table = malloc(sizeof(can_ids));
+    uint16_t *hash_table = malloc(NUM_BUCKETS * sizeof(uint16_t));
     if (!hash_table) {
         printf("failed to allocate hash table\n");
         return -1;
@@ -52,7 +52,7 @@ int main() {
         if (i == NUM_INPUTS) { //congrats no collisions
             break; 
         }
-        memset(hash_table, 0, sizeof(can_ids));
+        memset(hash_table, 0, NUM_BUCKETS * sizeof(uint16_t));
         i = 0;
         k++;
     }
