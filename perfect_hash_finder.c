@@ -109,16 +109,17 @@ int compare(const void *a, const void *b) {
 }
 
 #define NUM_INPUTS (uint32_t)(sizeof(can_ids) / (sizeof(can_ids[0])))
-#define NUM_BUCKETS ((uint32_t)((uint32_t)(NUM_INPUTS) * 1.9) + 1)
 #define N_STRESS_TEST   100000
 
-#define HASH(x) ((k*x % p) % NUM_BUCKETS)
+#define HASH(x) ((k*x % p) % m)
 
 const uint32_t p = 66587; //randomly chosen prime larger than the universe of possible CAN ids
 const uint32_t max_k = (UINT32_MAX / 4096);
 const uint32_t min_k = (uint32_t)(p / 10); //smallest CAN id, so we don't search things where the x%p=x
 struct key_value **hash_table;
 uint32_t k = min_k;
+
+int m = NUM_INPUTS;
 
 struct key_value *find_hash(uint16_t key);
 struct key_value *inputs;
@@ -143,13 +144,13 @@ int main() {
 
     qsort(inputs, NUM_INPUTS, sizeof(inputs[0]), compare);
 
-    hash_table = malloc(NUM_BUCKETS * sizeof(struct key_value *));
+    hash_table = malloc(m * sizeof(struct key_value *));
     if (!hash_table) {
         printf("failed to allocate hash table\n");
         return -1;
     }
-    printf("find a k value with num_inputs: %d, num_buckets: %d, starting k: %d, max k: %d\n", NUM_INPUTS, NUM_BUCKETS, min_k, max_k);
-    memset(hash_table, 0, NUM_BUCKETS * sizeof(struct key_value *));
+    printf("find a k value with num_inputs: %d, num_buckets: %d, starting k: %d, max k: %d\n", NUM_INPUTS, m, min_k, max_k);
+    memset(hash_table, 0, m * sizeof(struct key_value *));
     uint32_t i = 0;
     while(1) {
         for(; i < NUM_INPUTS; i++) {
@@ -163,16 +164,17 @@ int main() {
         if (i == NUM_INPUTS) { //congrats no collisions
             break;
         }
-        memset(hash_table, 0, NUM_BUCKETS * sizeof(struct key_value *));
+        memset(hash_table, 0, m * sizeof(struct key_value *));
         i = 0;
         k++;
         if (k >= max_k) {
             printf("failed to find acceptable k\n");
+            // TODO: here inc m and go again, so we can find smallest possible m
             return -1;
         }
     }
     printf("here's your hash table, with k = %d, bitch\n", k);
-    for (uint32_t i = 0; i < NUM_BUCKETS; i++) {
+    for (uint32_t i = 0; i < m; i++) {
         if (hash_table[i])
             printf("%X\n", hash_table[i]->key);
         else 

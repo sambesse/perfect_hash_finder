@@ -1,0 +1,6 @@
+[package]
+name = "perfect_hash_finder"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
