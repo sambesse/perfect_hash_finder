@@ -119,7 +119,7 @@ const uint32_t min_k = (uint32_t)(p / 10); //smallest CAN id, so we don't search
 struct key_value **hash_table;
 uint32_t k = min_k;
 
-int m = NUM_INPUTS;
+uint32_t m = NUM_INPUTS;
 
 struct key_value *find_hash(uint16_t key);
 struct key_value *inputs;
@@ -164,13 +164,21 @@ int main() {
         if (i == NUM_INPUTS) { //congrats no collisions
             break;
         }
-        memset(hash_table, 0, m * sizeof(struct key_value *));
         i = 0;
         k++;
+        memset(hash_table, 0, m * sizeof(struct key_value *));
         if (k >= max_k) {
-            printf("failed to find acceptable k\n");
+            k = 0;
+            printf("failed to find acceptable k with m = %d\n", m);
             // TODO: here inc m and go again, so we can find smallest possible m
-            return -1;
+            m++;
+            free(hash_table);
+            hash_table = malloc(m * sizeof(struct key_value *));
+            if (!hash_table) {
+                printf("failed to allocate hash table\n");
+                return -1;
+            }
+            memset(hash_table, 0, m * sizeof(struct key_value *));
         }
     }
     printf("here's your hash table, with k = %d, bitch\n", k);
